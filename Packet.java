@@ -22,7 +22,7 @@ class Packet {
       // Assign header info to fields
       checksum = packetBytes[0];
       sequenceNum = packetBytes[1];
-      lastIndex = ByteBuffer.wrap(packetBytes, 2, 2).getInt();
+      lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
       data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length - 1);
    }
    
@@ -55,9 +55,8 @@ class Packet {
       byte[] packetBytes = new byte[lastIndex + 1];
       packetBytes[0] = checksum;
       packetBytes[1] = (byte) sequenceNum;
-      byte[] indexArray = ByteBuffer.allocate(2).putInt(lastIndex).array();
-      packetBytes[2] = indexArray[0];
-      packetBytes[3] = indexArray[1];
+      packetBytes[2] = (byte) (lastIndex >> 8);
+      packetBytes[3] = (byte) (lastIndex % 256);
       for (int i = 0; i < data.length; i++) {
          packetBytes[headerSize + i] = data[i];
       }

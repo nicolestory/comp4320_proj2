@@ -7,10 +7,14 @@ class UDPServer {
 
    private static int portNumber = 10052;
    private static String correctArgUsage = "Args should be in the following order:\n"
-    + "<portNumber>\nValid ports are 10052-10055.";
+    + "<portNumber>";
 
-   public static void main(String args[]) throws Exception     
-   {
+   /**
+    * Main. This is where the magic happens.
+    * 
+    * @param args: the command line arguments
+    */
+   public static void main(String args[]) throws Exception {
       if (!parse_args(args)) {
          System.out.println(correctArgUsage);
          return;
@@ -25,38 +29,29 @@ class UDPServer {
       {
          receiveData = new byte[1024];
          DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-         System.out.println("Ready to recieve packets");
+         System.out.println("Ready to recieve HTTP requests");
          serverSocket.receive(receivePacket);
          int port = receivePacket.getPort();
          System.out.println("Recieved a packet on port " + port + "!");
          String request = new String(receivePacket.getData());
          InetAddress IPAddress = receivePacket.getAddress();
          
-                     
+         // Segment packets and send them
          ArrayList<Packet> packets = segmentation(request);
-         
          sendPackets(packets, serverSocket, IPAddress, port);
          
          System.out.println();
-         
-         //System.out.println("File name: " + fileName);
-         //System.out.println("parseR[0]: " + result[0] + "\nparseR[1]: " + result[1]);
-         
-         /*
-         byte[][] packets = segmentation(result[1]);
-         String response = result[0];
-         for (byte[] packet : packets) {
-            DatagramPacket sendPacket = new DatagramPacket(packet, packet.length, IPAddress, port);
-            serverSocket.send(sendPacket);
-            System.out.println("Sent a packet back.");
-         }
-         */
       }
    }
    
    /**
     * TODO: Implement Selective Repeat here.
     * Current stuff is a working version that just sends the packets.
+    * 
+    * @param packetList: a list of packets to be sent
+    * @param serverSocket: a DatagramSocket to send packets through
+    * @param IPAddress: the IP of the client
+    * @param port: the port of the client process
     */
    public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
    InetAddress IPAddress, int port) {
@@ -140,36 +135,6 @@ class UDPServer {
       }
       
       return file;
-   
-   /*
-      File f = new File(file);
-      
-      String fileText = "";
-      try
-      {
-         BufferedReader br = new BufferedReader(new FileReader(file));
-         for (String line; (line = br.readLine()) != null;) {
-            System.out.print(line);
-            fileText += line + "\n";
-         }
-         br.close();
-      }
-      catch (Exception e)
-      {
-         System.out.println("Oh no.");
-         return s;
-      }
-   
-      if (f.exists()) {
-         s[0] = "HTTP/1.0 200 Document Follows \r\nContent-Type: text/plain\r\nContent-Length: " + f.length() + "\r\n\r\n" + fileText;
-         s[1] = file;
-      }
-      else {
-         s[0] = "Error: File not found";
-      }
-      return s;
-      
-      */
    }
    
    private static boolean parse_args(String args[])

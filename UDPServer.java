@@ -81,12 +81,20 @@ class UDPServer {
       int sequenceNum = 0;
       InputStream fileInput = new FileInputStream(fileName);
       int bytesRead = 0;
-      byte[] packetData = new byte[Packet.maxDataBytes];
+      String headerInfo = "HTTP/1.0 200 Document Follows \r\nContent-Type: text/plain\r\nContent-Length: " 
+         + new File(fileName).length() + "\r\n\r\n";
+      int headerSize = headerInfo.length();
+      int numDataBytes = Packet.maxDataBytes - headerSize;
+      byte[] packetData = Arrays.copyOfRange(headerInfo.getBytes(), 0, Packet.maxDataBytes);
+      
+      System.out.println("packetData.length "+packetData.length);
       
       // Read in file in segments, add to packetList
-      while ((bytesRead = fileInput.read(packetData)) != -1) {
+      while ((bytesRead = fileInput.read(packetData, headerSize, numDataBytes)) != -1) {
          packetList.add(new Packet(sequenceNum, Arrays.copyOfRange(packetData, 0, bytesRead)));
          sequenceNum++;
+         headerSize = 0;
+         numDataBytes = Packet.maxDataBytes;
       }
       
       fileInput.close();

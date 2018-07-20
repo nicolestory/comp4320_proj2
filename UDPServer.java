@@ -87,8 +87,6 @@ class UDPServer {
       int numDataBytes = Packet.maxDataBytes - headerSize;
       byte[] packetData = Arrays.copyOfRange(headerInfo.getBytes(), 0, Packet.maxDataBytes);
       
-      System.out.println("packetData.length "+packetData.length);
-      
       // Read in file in segments, add to packetList
       while ((bytesRead = fileInput.read(packetData, headerSize, numDataBytes)) != -1) {
          packetList.add(new Packet(sequenceNum, Arrays.copyOfRange(packetData, 0, bytesRead)));

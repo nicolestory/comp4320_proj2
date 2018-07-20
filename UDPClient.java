@@ -82,8 +82,12 @@ class UDPClient {
       return tempProb;
    }
    
-   public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) {
-      boolean packetsLeft = false;
+   /**
+    * TODO: Change this to Selective Repeat.
+    * TODO: Add in Gremlin function for each packet.
+    */
+   public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
+      boolean receivedLastPacket = false;
       ArrayList<Packet> packetsList = new ArrayList<Packet>();
    // Read in packets, and sort them:
       do {
@@ -101,7 +105,6 @@ class UDPClient {
             packetsList.add(packet);
          }
          else if (packetsList.size() < sequenceNumber) {
-         
             for (int i = sequenceNumber; i < packetsList.size(); i++) {
                packetsList.add(null);
             }
@@ -111,8 +114,8 @@ class UDPClient {
             packetsList.add(sequenceNumber, packet);
          }
       
-         packetsLeft = morePacketsLeft(packet);
-      } while (packetsLeft);
+         receivedLastPacket = packet.lastPacket();
+      } while (!receivedLastPacket);
    
       return null;
    }

@@ -35,6 +35,10 @@ class UDPServer {
                      
          ArrayList<Packet> packets = segmentation(request);
          
+         sendPackets(packets, serverSocket, IPAddress, port);
+         
+         System.out.println();
+         
          //System.out.println("File name: " + fileName);
          //System.out.println("parseR[0]: " + result[0] + "\nparseR[1]: " + result[1]);
          
@@ -47,6 +51,26 @@ class UDPServer {
             System.out.println("Sent a packet back.");
          }
          */
+      }
+   }
+   
+   /**
+    * TODO: Implement Selective Repeat here.
+    * Current stuff is a working version that just sends the packets.
+    */
+   public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
+   InetAddress IPAddress, int port) {
+      DatagramPacket sendPacket;
+      for (Packet packet : packetList) {
+         byte[] packetByte = packet.toByteArray();
+         sendPacket = new DatagramPacket(packetByte, packetByte.length, IPAddress, port);
+         try {
+            serverSocket.send(sendPacket);
+         }
+         catch (IOException e) {
+            System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
+         }
+         System.out.println("Sent packet " + packet.getSequenceNum() + " back.");
       }
    }
    
@@ -64,64 +88,18 @@ class UDPServer {
       int bytesRead = 0;
       byte[] packetData = new byte[Packet.maxDataBytes];
       
+      // Read in file in segments, add to packetList
       while ((bytesRead = fileInput.read(packetData)) != -1) {
-         Packet temp = new Packet(sequenceNum, packetData);
-         System.out.println(temp);
          packetList.add(new Packet(sequenceNum, Arrays.copyOfRange(packetData, 0, bytesRead)));
          sequenceNum++;
       }
       
       fileInput.close();
       
+      // Add last packet with null character:
+      packetList.add(new Packet(sequenceNum, new byte[] {0b0}));
+      
       return packetList;
-      
-      /*
-      int fileSize = 0;
-      
-      
-      
-      File f = new File(fileName);
-   
-      fileSize = (int) f.length();
-   
-      byte[][] segmentationMatrix = new byte[(int)(fileSize / 253.0) + 1][256];
-      int numBytes = segmentationMatrix.length - 1;
-   
-      byte[] fileInBytes = new byte[fileSize];
-      FileInputStream fis = new FileInputStream(f);
-   
-      fis.read(fileInBytes);
-      fis.close();
-   
-      for (int i = 0; i < numBytes; i++) {
-         for (int j = 3; j < 256; j++) {
-            segmentationMatrix[i][j] = fileInBytes[(i * 253) + j - 3];
-         }
-      }
-   
-      // Get last packet size:
-      int lastPacketSize = fileSize % 253;
-   
-      // Header info:
-      for (int k = 0; k < numBytes; k++) {
-         segmentationMatrix[k][1] = (byte) k; // Sequence number
-         // Packet Size
-         if (k == fileInBytes.length - 1) {
-            segmentationMatrix[k][2] = (byte) (lastPacketSize - 1);
-         }
-         else {
-            segmentationMatrix[k][2] = (byte) 255;
-         }
-         segmentationMatrix[k][0] = checkSum(segmentationMatrix[k]); // Checksum
-      
-      }
-      byte[] lastPacket = {0, (byte) numBytes, 4, 0b0};
-      lastPacket[0] = checkSum(lastPacket);
-      segmentationMatrix[numBytes] = lastPacket;
-   
-      return segmentationMatrix;
-   
-      */
    }
 
    

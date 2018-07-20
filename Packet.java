@@ -23,7 +23,7 @@ class Packet {
       checksum = packetBytes[0];
       sequenceNum = packetBytes[1];
       lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
-      data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length - 1);
+      data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length);
    }
    
    /**
@@ -69,7 +69,7 @@ class Packet {
     */   
    public static byte generateChecksum(byte[] packetBytes) {
       int sum = 0;
-      for (int i = 1; i < (int) (packetBytes[2] & 0xFF); i++) {
+      for (int i = 1; i < packetBytes.length; i++) {
          sum += (int) (packetBytes[i] & 0xFF);
       }
       return (byte) (sum % 256);
@@ -118,7 +118,7 @@ class Packet {
     * Returns true if this is the last packet, and false otherwise.
     */
    public boolean lastPacket() {
-      if (data[lastIndex + headerSize] == 0b0) {
+      if (data[lastIndex - headerSize] == 0b0) {
          return true;
       }
       return false;

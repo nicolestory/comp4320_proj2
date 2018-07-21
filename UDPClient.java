@@ -70,6 +70,7 @@ class UDPClient {
          receiveData = receivePacket.getData();
          
          Packet packet = new Packet(receiveData);
+         packet = gremlin(packet);
          
          System.out.println(packet.toString()); 
          int sequenceNumber = packet.getSequenceNum();
@@ -100,19 +101,13 @@ class UDPClient {
     * @return the corrupted packet, or null for a lost packet
     */
    public static Packet gremlin(Packet packet) throws Exception {
-      if (corruptionProb == 0.0 && lossProb == 0.0)
-      {
-         System.out.println("No Gremlins are attacking today. Carry on.");
-         return packet;
-      }
-      System.out.println("Gremlins are attacking!");
-      
       double changePacketProbability = Math.random();
       if (changePacketProbability <= corruptionProb) {
-         System.out.println("A gremlin got a packet!");
+         System.out.println("A gremlin corrupted a packet!");
          packet = damagePacket(packet);
       }
       else if (Math.random() <= lossProb) {
+         System.out.println("A gremlin stole a packet!");
          return null;
       }
       
@@ -128,15 +123,15 @@ class UDPClient {
          numBytesDamaged = 2;
       }
       
-      byte[] packetArray = packet.toByteArray();
+      byte[] packetData = packet.getData();
       
       for (int i = 0; i < numBytesDamaged; i++) {
-         int byteToChange = (int) (Math.random() * packetArray.length);
-         packetArray[byteToChange] = (byte) (packetArray[byteToChange] ^ 0xFF);
+         int byteToChange = (int) (Math.random() * packetData.length);
+         packetData[byteToChange] = (byte) (packetData[byteToChange] ^ 0xFF);
          System.out.println("Changed a byte!");
       }
       
-      packet = new Packet(packetArray);
+      packet.setData(packetData);
       
       return packet;
    }

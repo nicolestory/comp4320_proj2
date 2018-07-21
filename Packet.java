@@ -1,4 +1,3 @@
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 class Packet {
@@ -84,8 +83,7 @@ class Packet {
          sum += (int) (data[i] & 0xFF);
       }
       sum += sequenceNum;
-      byte[] indexArray = ByteBuffer.allocate(2).putInt(lastIndex).array();
-      sum += indexArray[0] + indexArray[1];
+      sum += (byte) (lastIndex >> 8) + (byte) (lastIndex % 256);
       return (byte) (sum % 256);
    }
    

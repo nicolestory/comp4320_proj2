@@ -72,13 +72,17 @@ class UDPClient {
          Packet packet = new Packet(receiveData);
          packet = gremlin(packet);
          
+         if (packet == null || errorDetected(packet)) {
+            continue;
+         }
+         
          System.out.println(packet.toString()); 
          int sequenceNumber = packet.getSequenceNum();
          if (packetsList.size() == sequenceNumber) {
             packetsList.add(packet);
          }
          else if (packetsList.size() < sequenceNumber) {
-            for (int i = sequenceNumber; i < packetsList.size(); i++) {
+            for (int i = packetsList.size(); i < sequenceNumber; i++) {
                packetsList.add(null);
             }
             packetsList.add(sequenceNumber, packet);
@@ -91,6 +95,27 @@ class UDPClient {
       } while (!receivedLastPacket);
    
       return packetsList;
+   }
+   
+   /**
+    * Detects errors in packets
+    * 
+    * @param packet: the packet to error-check
+    * @return true if the packet has an error or is null, and false if 
+    *    the packet has no detectable errors.
+    */
+   public static boolean errorDetected(Packet packet) throws Exception {
+      if (packet == null) {
+         System.out.println("Packet was lost!");
+         return true;
+      }
+      
+      if (packet.getChecksum() != packet.generateChecksum()) {
+         System.out.println("An error was detected in packet " + packet.getSequenceNum() + ":");
+         System.out.println(packet.toString());
+         return true;
+      }
+      return false;
    }
    
    /**
@@ -114,6 +139,12 @@ class UDPClient {
       return packet;
    }
    
+   /**
+    * Corrupts the packet. XORs 1, 2, or 3 bytes of the packet.
+    * 
+    * @param packet: the packet to be damaged
+    * @return the damaged packet
+    */
    public static Packet damagePacket(Packet packet) throws Exception {
       int numBytesDamaged = 3;
       double randNumBytesDamaged = Math.random();

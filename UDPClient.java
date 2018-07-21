@@ -93,6 +93,56 @@ class UDPClient {
    }
    
    /**
+    * Gremlins attack your packets. >:)
+    * They corrupt or lose packets, depending on probabilities given in command line args.
+    * 
+    * @param packet: the packet to be corrupted or lost
+    * @return the corrupted packet, or null for a lost packet
+    */
+   public static Packet gremlin(Packet packet) throws Exception {
+      if (corruptionProb == 0.0 && lossProb == 0.0)
+      {
+         System.out.println("No Gremlins are attacking today. Carry on.");
+         return packet;
+      }
+      System.out.println("Gremlins are attacking!");
+      
+      double changePacketProbability = Math.random();
+      if (changePacketProbability <= corruptionProb) {
+         System.out.println("A gremlin got a packet!");
+         packet = damagePacket(packet);
+      }
+      else if (Math.random() <= lossProb) {
+         return null;
+      }
+      
+      return packet;
+   }
+   
+   public static Packet damagePacket(Packet packet) throws Exception {
+      int numBytesDamaged = 3;
+      double randNumBytesDamaged = Math.random();
+      if (randNumBytesDamaged < 0.5) {
+         numBytesDamaged = 1;
+      } else if (randNumBytesDamaged < 0.8) {
+         numBytesDamaged = 2;
+      }
+      
+      byte[] packetArray = packet.toByteArray();
+      
+      for (int i = 0; i < numBytesDamaged; i++) {
+         int byteToChange = (int) (Math.random() * packetArray.length);
+         packetArray[byteToChange] = (byte) (packetArray[byteToChange] ^ 0xFF);
+         System.out.println("Changed a byte!");
+      }
+      
+      packet = new Packet(packetArray);
+      
+      return packet;
+   }
+
+   
+   /**
     * Outputs packet array to file.
     * 
     * @param packetsList: a list of Packets

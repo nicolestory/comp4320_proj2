@@ -201,9 +201,17 @@ class UDPClient {
     */
    private static boolean parse_args(String args[])
    {
-      if (args.length >= 2) {
+      if (args.length >= 1) {
          serverHostname = args[0];
-         int tempPortNumber = Integer.parseInt(args[1]);
+      }
+      if (args.length >= 2) {
+         int tempPortNumber;
+         try {
+            tempPortNumber = Integer.parseInt(args[1]);
+         }
+         catch (Exception e) {
+            return false;
+         }
          if ((10052 > tempPortNumber) || (tempPortNumber > 10055)) {
             System.out.println("Port " + tempPortNumber + " is out of our port range.");
             System.out.println("Try a port between 10052 and 10055");

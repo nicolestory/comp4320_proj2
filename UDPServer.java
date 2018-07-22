@@ -66,6 +66,16 @@ class UDPServer {
             System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
          }
          System.out.println("Sent packet " + packet.getSequenceNum() + " back.");
+         
+         // TEMP:
+         // Without this, we fill up the buffer too fast and loose a l o t of packets.
+         // We won't need this once we get Selective Repeat working.
+         try {
+            Thread.sleep(100);
+         }
+         catch (Exception e) {
+            continue;
+         }
       }
    }
    

@@ -179,6 +179,7 @@ class UDPClient {
          out.write(packet.getData());
       }
       out.close();
+      System.out.println("Successfully wrote to file new_" + fileName);
    }
    
    /**

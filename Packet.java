@@ -3,11 +3,11 @@ import java.util.Arrays;
 class Packet {
 
    private byte checksum;           // Index 0
-   private int sequenceNum;         // Index 1
-   private int lastIndex;           // Index 2-3
+   private int sequenceNum;         // Index 1-2
+   private int lastIndex;           // Index 3-4
    private byte[] data;
    public static final int maxPacketSize = 512;
-   public static final int headerSize = 4;
+   public static final int headerSize = 5;
    public static final int maxDataBytes = maxPacketSize - headerSize;
    
    /**
@@ -20,8 +20,8 @@ class Packet {
       }
       // Assign header info to fields
       checksum = packetBytes[0];
-      sequenceNum = packetBytes[1];
-      lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
+      sequenceNum = (packetBytes[1] << 8) | (packetBytes[2] & 0xff);
+      lastIndex = (packetBytes[3] << 8) | (packetBytes[4] & 0xff);
       data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length);
    }
    
@@ -35,7 +35,7 @@ class Packet {
       sequenceNum = seqNum;
       lastIndex = packetData.length + headerSize - 1;
       data = packetData;
-      checksum = generateChecksum(toByteArray());
+      checksum = generateChecksum();
    }
    
    /**
@@ -53,9 +53,10 @@ class Packet {
    public byte[] toByteArray() {
       byte[] packetBytes = new byte[lastIndex + 1];
       packetBytes[0] = checksum;
-      packetBytes[1] = (byte) sequenceNum;
-      packetBytes[2] = (byte) (lastIndex >> 8);
-      packetBytes[3] = (byte) (lastIndex % 256);
+      packetBytes[1] = (byte) (sequenceNum >> 8);
+      packetBytes[2] = (byte) (sequenceNum % 256);
+      packetBytes[3] = (byte) (lastIndex >> 8);
+      packetBytes[4] = (byte) (lastIndex % 256);
       for (int i = 0; i < data.length; i++) {
          packetBytes[headerSize + i] = data[i];
       }
@@ -82,7 +83,7 @@ class Packet {
       for (int i = 0; i < data.length; i++) {
          sum += (int) (data[i] & 0xFF);
       }
-      sum += sequenceNum;
+      sum += (byte) (sequenceNum >> 8) + (byte) (sequenceNum % 256);
       sum += (byte) (lastIndex >> 8) + (byte) (lastIndex % 256);
       return (byte) (sum % 256);
    }

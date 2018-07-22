@@ -100,16 +100,10 @@ class UDPServer {
       // Read in file in segments, add to packetList
       while ((bytesRead = fileInput.read(packetData, headerSize, numDataBytes)) != -1) {
          int dataLength = bytesRead + headerSize;
-         if ((dataLength) < Packet.maxDataBytes) {
-            System.out.println("Tiny packet! headerS " + headerSize + " packetData " + packetData.length);
-            //packetData = formatLastPacketData(packetData, bytesRead);
-         }
-         System.out.println("Bytes Read: " + bytesRead);
          packetList.add(new Packet(sequenceNum, Arrays.copyOfRange(packetData, 0, dataLength), dataLength));
          sequenceNum++;
          headerSize = 0;
          numDataBytes = Packet.maxDataBytes;
-         //packetData = new byte[Packet.maxDataBytes];
       }
       
       fileInput.close();
@@ -157,15 +151,6 @@ class UDPServer {
       }
       
       return file;
-   }
-   
-   private static byte[] formatLastPacketData(byte[] lastData, int bytesRead) {
-      byte[] result = new byte[bytesRead + 1];
-      for (int i = 0; i < bytesRead; i++) {
-         result[i] = lastData[i];
-      }
-      result[bytesRead] = 0b0;
-      return result;
    }
    
    private static boolean parse_args(String args[])

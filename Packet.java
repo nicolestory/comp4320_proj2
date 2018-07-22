@@ -39,6 +39,19 @@ class Packet {
    }
    
    /**
+    * From byte array (data ONLY), sequence number, and index to Packet object
+    */
+   public Packet(int seqNum, byte[] packetData, int dataSize) throws Exception {
+      if (packetData.length > maxDataBytes || dataSize > maxDataBytes) {
+         throw new Exception("i wish you would not, my guy");
+      }
+      sequenceNum = seqNum;
+      lastIndex = dataSize + headerSize - 1;
+      data = packetData;
+      checksum = generateChecksum();
+   }
+   
+   /**
     * Initializes a Packet object with only a Sequence Number.
     * Please don't use this on accident.
     * Only on purpose, pls.

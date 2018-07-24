@@ -3,12 +3,13 @@ import java.util.Arrays;
 class Packet {
 
    private byte checksum;           // Index 0
-   private int sequenceNum;         // Index 1-2
-   private int lastIndex;           // Index 3-4
+   private int sequenceNum;         // Index 1
+   private int lastIndex;           // Index 2-3
    private byte[] data;
    public static final int maxPacketSize = 512;
-   public static final int headerSize = 5;
+   public static final int headerSize = 4;
    public static final int maxDataBytes = maxPacketSize - headerSize;
+   public static final int maxSequenceNum = 24;
    
    /**
     * From byte array (data AND headers) to Packet object.
@@ -20,8 +21,8 @@ class Packet {
       }
       // Assign header info to fields
       checksum = packetBytes[0];
-      sequenceNum = (packetBytes[1] << 8) | (packetBytes[2] & 0xff);
-      lastIndex = (packetBytes[3] << 8) | (packetBytes[4] & 0xff);
+      sequenceNum = packetBytes[1] % maxSequenceNum;
+      lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
       data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length);
    }
    
@@ -32,7 +33,7 @@ class Packet {
       if (packetData.length > maxDataBytes) {
          throw new Exception("boi if you DONT");
       }
-      sequenceNum = seqNum;
+      sequenceNum = seqNum % maxSequenceNum;
       lastIndex = packetData.length + headerSize - 1;
       data = packetData;
       checksum = generateChecksum();
@@ -45,7 +46,7 @@ class Packet {
       if (packetData.length > maxDataBytes || dataSize > maxDataBytes) {
          throw new Exception("i wish you would not, my guy");
       }
-      sequenceNum = seqNum;
+      sequenceNum = seqNum % maxSequenceNum;
       lastIndex = dataSize + headerSize - 1;
       data = packetData;
       checksum = generateChecksum();
@@ -57,7 +58,7 @@ class Packet {
     * Only on purpose, pls.
     */
    public Packet(int sn) {
-      sequenceNum = sn;
+      sequenceNum = sn % maxSequenceNum;
    }
    
    /**
@@ -66,10 +67,9 @@ class Packet {
    public byte[] toByteArray() {
       byte[] packetBytes = new byte[lastIndex + 1];
       packetBytes[0] = checksum;
-      packetBytes[1] = (byte) (sequenceNum >> 8);
-      packetBytes[2] = (byte) (sequenceNum % 256);
-      packetBytes[3] = (byte) (lastIndex >> 8);
-      packetBytes[4] = (byte) (lastIndex % 256);
+      packetBytes[1] = (byte) sequenceNum;
+      packetBytes[2] = (byte) (lastIndex >> 8);
+      packetBytes[3] = (byte) (lastIndex % 256);
       for (int i = 0; i < data.length; i++) {
          packetBytes[headerSize + i] = data[i];
       }
@@ -96,7 +96,7 @@ class Packet {
       for (int i = 0; i < data.length; i++) {
          sum += (int) (data[i] & 0xFF);
       }
-      sum += (byte) (sequenceNum >> 8) + (byte) (sequenceNum % 256);
+      sum += sequenceNum;
       sum += (byte) (lastIndex >> 8) + (byte) (lastIndex % 256);
       return (byte) (sum % 256);
    }
@@ -175,7 +175,7 @@ class Packet {
     * Sets Packet's sequence number.
     */
    public void setSequenceNumber(int newSeqNum) {
-      sequenceNum = newSeqNum;
+      sequenceNum = newSeqNum % maxSequenceNum;
    }
    
    /**

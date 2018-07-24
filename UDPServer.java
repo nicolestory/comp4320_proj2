@@ -66,6 +66,7 @@ class UDPServer {
             System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
          }
          System.out.println("Sent packet " + packet.getSequenceNum() + " back.");
+         System.out.println(packet.toString());
          
          // TEMP:
          // Without this, we fill up the buffer too fast and loose a l o t of packets.

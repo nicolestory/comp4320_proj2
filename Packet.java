@@ -2,14 +2,19 @@ import java.util.Arrays;
 
 class Packet {
 
-   private byte checksum;           // Index 0
-   private int sequenceNum;         // Index 1
-   private int lastIndex;           // Index 2-3
-   private byte[] data;
+   private byte checksum = -1;      // Index 0
+   private int sequenceNum = -1;    // Index 1
+   private int lastIndex = -1;      // Index 2-3
+   private int ACKNum = -1;         // Index 4
+   private byte[] data = null;
    public static final int maxPacketSize = 512;
-   public static final int headerSize = 4;
+   public static final int headerSize = 5;
    public static final int maxDataBytes = maxPacketSize - headerSize;
    public static final int maxSequenceNum = 24;
+   public static final int numAcksAllowed = 8;  // AKA Window size
+   
+   private static byte True = 0x00;
+   private static byte False = (byte) 0xFF;
    
    /**
     * From byte array (data AND headers) to Packet object.
@@ -17,7 +22,7 @@ class Packet {
     */
    public Packet(byte[] packetBytes) throws Exception {
       if (packetBytes.length > maxPacketSize) {
-         throw new Exception("Listen here friendo");
+         throw new Exception("Byte array is too long.");
       }
       // Assign header info to fields
       checksum = packetBytes[0];
@@ -31,7 +36,7 @@ class Packet {
     */
    public Packet(int seqNum, byte[] packetData) throws Exception {
       if (packetData.length > maxDataBytes) {
-         throw new Exception("boi if you DONT");
+         throw new Exception("Byte array for packet " + seqNum + " is too long.");
       }
       sequenceNum = seqNum % maxSequenceNum;
       lastIndex = packetData.length + headerSize - 1;
@@ -44,12 +49,39 @@ class Packet {
     */
    public Packet(int seqNum, byte[] packetData, int dataSize) throws Exception {
       if (packetData.length > maxDataBytes || dataSize > maxDataBytes) {
-         throw new Exception("i wish you would not, my guy");
+         throw new Exception("Packet data or index is too large.");
       }
       sequenceNum = seqNum % maxSequenceNum;
       lastIndex = dataSize + headerSize - 1;
-      data = packetData;
+      if (dataSize < packetData.length) {
+         data = Arrays.copyOf(packetData, dataSize);
+      }
+      else {
+         data = packetData;
+      }
       checksum = generateChecksum();
+   }
+   
+   /**
+    * Creates a Packet object that represents an ACK/NAK vector.
+    */
+   public Packet(int firstAckNum, boolean[] ackArray) throws Exception {
+      if (ackArray.length != numAcksAllowed) {
+         throw new Exception("Number of ACKS must be " + numAcksAllowed);
+      }
+      if (firstAckNum < 0) {
+         throw new Exception("Negative ACK number given: " + firstAckNum);
+      }
+      data = new byte[numAcksAllowed];
+      for (int i = 0; i < numAcksAllowed; i++) {
+         if (ackArray[i]) {
+            data[i] = True;
+         }
+         else {
+            data[i] = False;
+         }
+      }
+      ACKNum = firstAckNum % maxSequenceNum;
    }
    
    /**
@@ -74,6 +106,25 @@ class Packet {
          packetBytes[headerSize + i] = data[i];
       }
       return packetBytes;
+   }
+   
+   /**
+    * Decodes an ACK vector.
+    */
+   public boolean[] decodeACK() throws Exception {
+      if (ACKNum < 0) {
+         throw new Exception("This packet is not an ACK/NAK packet.");
+      }
+      boolean[] ACKArray = new boolean[numAcksAllowed];
+      for (int i = 0; i < numAcksAllowed; i++) {
+         if (data[i] == True) {
+            ACKArray[i] = true;
+         }
+         else {
+            ACKArray[i] = false;
+         }
+      }
+      return ACKArray;
    }
       
    /**
@@ -109,7 +160,7 @@ class Packet {
          return new String(data, "UTF-8");
       }
       catch (Exception e) {
-         System.out.println("Oh no.");
+         System.out.println("Error in decoding packet data.");
          return "";
       }
    }
@@ -165,6 +216,13 @@ class Packet {
    }
    
    /**
+    * Returns Packet's ACK number.
+    */
+   public int getACKNum() {
+      return ACKNum;
+   }
+   
+   /**
     * Calculates and sets Packet's checksum field.
     */
    public void setChecksum() {
@@ -176,6 +234,13 @@ class Packet {
     */
    public void setSequenceNumber(int newSeqNum) {
       sequenceNum = newSeqNum % maxSequenceNum;
+   }
+   
+   /**
+    * Sets Packet's ACK number.
+    */
+   public void setACKNum(int newACKNum) {
+      ACKNum = newACKNum % maxSequenceNum;
    }
    
    /**

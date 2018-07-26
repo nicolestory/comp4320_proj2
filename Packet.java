@@ -28,6 +28,7 @@ class Packet {
       checksum = packetBytes[0];
       sequenceNum = packetBytes[1] % maxSequenceNum;
       lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
+      ACKNum = packetBytes[4];
       data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length);
    }
    
@@ -102,6 +103,7 @@ class Packet {
       packetBytes[1] = (byte) sequenceNum;
       packetBytes[2] = (byte) (lastIndex >> 8);
       packetBytes[3] = (byte) (lastIndex % 256);
+      packetBytes[4] = (byte) ACKNum;
       for (int i = 0; i < data.length; i++) {
          packetBytes[headerSize + i] = data[i];
       }
@@ -149,6 +151,7 @@ class Packet {
       }
       sum += sequenceNum;
       sum += (byte) (lastIndex >> 8) + (byte) (lastIndex % 256);
+      sum += (byte) ACKNum;
       return (byte) (sum % 256);
    }
    
@@ -173,6 +176,9 @@ class Packet {
       result += "\nChecksum: " + checksum;
       result += "\nLast Index: " + lastIndex;
       result += "\nData: " + getDataString();
+      if (ACKNum >= 0) {
+         result += "\nACK Number: " + ACKNum;
+      }
       result += "\n\n";
       return result;
    }

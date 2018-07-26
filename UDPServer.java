@@ -112,34 +112,11 @@ class UDPServer {
       }
       
       System.out.println("All packets have been transmitted correctly!");
-   
-   /*
-      DatagramPacket sendPacket;
-      for (Packet packet : packetList) {
-         byte[] packetByte = packet.toByteArray();
-         sendPacket = new DatagramPacket(packetByte, packetByte.length, IPAddress, port);
-         try {
-            serverSocket.send(sendPacket);
-         }
-         catch (IOException e) {
-            System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
-         }
-         System.out.println("Sent packet " + packet.getSequenceNum() + " back.");
-         System.out.println(packet.toString());
-         
-         // TEMP:
-         // Without this, we fill up the buffer too fast and loose a l o t of packets.
-         // We won't need this once we get Selective Repeat working.
-         try {
-            Thread.sleep(100);
-         }
-         catch (Exception e) {
-            continue;
-         }
-      }
-      */
    }
    
+   /**
+    * Sends each packet to the client server.
+    */
    public static void send(ArrayList<Packet> packets, DatagramSocket serverSocket,
    InetAddress IPAddress, int port) {
       DatagramPacket sendPacket;
@@ -157,6 +134,10 @@ class UDPServer {
       }
    }
    
+   /**
+    * Waits for an ACK to come back from the client server, and returns that ACK
+    * as a Packet object.
+    */
    public static Packet waitForACK() throws Exception {
       DatagramSocket recieveSocket = new DatagramSocket();
       byte[] receiveData = new byte[Packet.maxPacketSize];

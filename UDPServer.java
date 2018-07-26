@@ -2,12 +2,18 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Timer;
+import java.util.TimerTask;
 
 class UDPServer {
 
    private static int portNumber = 10052;
    private static String correctArgUsage = "Args should be in the following order:\n"
     + "<portNumber>";
+   private static DatagramSocket serverSocket;
+   private static InetAddress IPAddress;
+   private static int port;
+   private static int timeout = 40;
 
    /**
     * Main. This is where the magic happens.
@@ -22,7 +28,7 @@ class UDPServer {
       
       System.out.println("Starting UDP Server on port " + portNumber);
       
-      DatagramSocket serverSocket = new DatagramSocket(portNumber);
+      serverSocket = new DatagramSocket(portNumber);
       byte[] receiveData;
       
       while(true)
@@ -31,14 +37,14 @@ class UDPServer {
          DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
          System.out.println("Ready to recieve HTTP requests");
          serverSocket.receive(receivePacket);
-         int port = receivePacket.getPort();
+         port = receivePacket.getPort();
          System.out.println("Recieved a packet on port " + port + "!");
          String request = new String(receivePacket.getData());
-         InetAddress IPAddress = receivePacket.getAddress();
+         IPAddress = receivePacket.getAddress();
          
          // Segment packets and send them
          ArrayList<Packet> packets = segmentation(request);
-         sendPackets(packets, serverSocket, IPAddress, port);
+         sendPackets(packets);
          
          System.out.println();
       }
@@ -49,28 +55,33 @@ class UDPServer {
     * Current stuff is a working version that just sends the packets.
     * 
     * @param packetList: a list of packets to be sent
-    * @param serverSocket: a DatagramSocket to send packets through
-    * @param IPAddress: the IP of the client
-    * @param port: the port of the client process
     */
-   public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
-      InetAddress IPAddress, int port) throws Exception {
+   public static void sendPackets(ArrayList<Packet> packetList) throws Exception {
       int firstSNinWindow = 0;
       int numAcks = Packet.numAcksAllowed;
       boolean[] sentCorrectly = new boolean[numAcks];
+      Timer[] timers = new Timer[numAcks];
       boolean totallyDone = false;
+      
+      for (int i = 0; i < timers.length; i++) {
+         timers[i] = new Timer();
+      }
       
       while (!totallyDone) {
          // Figure out which packets to send:
          ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
          for (int i = 0; i < sentCorrectly.length; i++) {
             if (!sentCorrectly[i]) {
-               packetsToSend.add(packetList.get(firstSNinWindow + i));
+               Packet packet = packetList.get(firstSNinWindow + i);
+               packetsToSend.add(packet);
+               PacketTimer packetTimer = new PacketTimer();
+               packetTimer.addPacket(packet);
+               timers[i].schedule(packetTimer, timeout);
             }
          }
          
          // Send the packets:
-         send(packetsToSend, serverSocket, IPAddress, port);
+         send(packetsToSend);
          
          // Wait for ACK/NAK vector:
          Packet ACKvector = waitForACK();
@@ -117,8 +128,7 @@ class UDPServer {
    /**
     * Sends each packet to the client server.
     */
-   public static void send(ArrayList<Packet> packets, DatagramSocket serverSocket,
-   InetAddress IPAddress, int port) {
+   public static void send(ArrayList<Packet> packets) {
       DatagramPacket sendPacket;
       for (Packet packet : packets) {
          byte[] packetByte = packet.toByteArray();

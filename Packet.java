@@ -6,9 +6,10 @@ class Packet {
    private int sequenceNum = -1;    // Index 1
    private int lastIndex = -1;      // Index 2-3
    private int ACKNum = -1;         // Index 4
+   private int numOfAcks = -1;      // Index 5
    private byte[] data = null;
    public static final int maxPacketSize = 512;
-   public static final int headerSize = 5;
+   public static final int headerSize = 6;
    public static final int maxDataBytes = maxPacketSize - headerSize;
    public static final int maxSequenceNum = 24;
    public static final int numAcksAllowed = 8;  // AKA Window size
@@ -29,6 +30,7 @@ class Packet {
       sequenceNum = packetBytes[1] % maxSequenceNum;
       lastIndex = (packetBytes[2] << 8) | (packetBytes[3] & 0xff);
       ACKNum = packetBytes[4];
+      numOfAcks = packetBytes[5];
       data = Arrays.copyOfRange(packetBytes, headerSize, packetBytes.length);
    }
    
@@ -66,15 +68,15 @@ class Packet {
    /**
     * Creates a Packet object that represents an ACK/NAK vector.
     */
-   public Packet(int firstAckNum, boolean[] ackArray) throws Exception {
-      if (ackArray.length != numAcksAllowed) {
-         throw new Exception("Number of ACKS must be " + numAcksAllowed);
+   public Packet(int firstAckNum, boolean[] ackArray, int numAcks) throws Exception {
+      if (ackArray.length > numAcksAllowed) {
+         throw new Exception("Number of ACKS must be less than or equal to " + numAcksAllowed);
       }
       if (firstAckNum < 0) {
          throw new Exception("Negative ACK number given: " + firstAckNum);
       }
-      data = new byte[numAcksAllowed];
-      for (int i = 0; i < numAcksAllowed; i++) {
+      data = new byte[numAcks];
+      for (int i = 0; i < numAcks; i++) {
          if (ackArray[i]) {
             data[i] = True;
          }
@@ -83,7 +85,8 @@ class Packet {
          }
       }
       ACKNum = firstAckNum % maxSequenceNum;
-      lastIndex = headerSize + numAcksAllowed - 1;
+      lastIndex = headerSize + numAcks - 1;
+      numOfAcks = numAcks;
    }
    
    /**
@@ -105,6 +108,7 @@ class Packet {
       packetBytes[2] = (byte) (lastIndex >> 8);
       packetBytes[3] = (byte) (lastIndex % 256);
       packetBytes[4] = (byte) ACKNum;
+      packetBytes[5] = (byte) numOfAcks;
       for (int i = 0; i < data.length; i++) {
          packetBytes[headerSize + i] = data[i];
       }
@@ -119,7 +123,7 @@ class Packet {
          throw new Exception("This packet is not an ACK/NAK packet.");
       }
       boolean[] ACKArray = new boolean[numAcksAllowed];
-      for (int i = 0; i < numAcksAllowed; i++) {
+      for (int i = 0; i < numOfAcks; i++) {
          if (data[i] == True) {
             ACKArray[i] = true;
          }
@@ -153,6 +157,7 @@ class Packet {
       sum += sequenceNum;
       sum += (byte) (lastIndex >> 8) + (byte) (lastIndex % 256);
       sum += (byte) ACKNum;
+      sum += (byte) numOfAcks;
       return (byte) (sum % 256);
    }
    
@@ -182,6 +187,19 @@ class Packet {
       }
       result += "\n\n";
       return result;
+   }
+   
+   public void printACK() throws Exception {
+      String result = "";
+      for (int i = 0; i < numOfAcks; i++) {
+         result += (ACKNum+i) + "    ";
+      }
+      result += "\n";
+      boolean[] arr = this.decodeACK();
+      for (int i = 0; i < numOfAcks; i++) {
+         result += arr[i] + " ";
+      }
+      System.out.println(result);
    }
    
    /**
@@ -227,6 +245,13 @@ class Packet {
     */
    public int getACKNum() {
       return ACKNum;
+   }
+   
+   /**
+    * Returns the number of ACKs in the packet.
+    */
+   public int getNumOfAcks() {
+      return numOfAcks;
    }
    
    /**

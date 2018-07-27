@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 class UDPClient {
 
@@ -51,6 +52,135 @@ class UDPClient {
       launchBrowser("new_" + fileName);
    }
    
+   
+   public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
+      boolean receivedLastPacket = false;
+      ArrayList<Packet> packetsList = new ArrayList<Packet>();
+      int numAcks = Packet.numAcksAllowed;
+      int maxSN = Packet.maxSequenceNum;
+      int firstSNinWindow = 0;
+      boolean[] receivedCorrectly = new boolean[maxSN];
+      
+      boolean totallyDone = false;
+      
+      // Read in packets, and sort them:
+      do {
+         System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
+         
+         int numAcksSent = numAcks;
+         int numExpected = 0;
+         for (int i = 0; i < numAcks; i++) {
+            if (!receivedCorrectly[(firstSNinWindow + i) % maxSN]) {
+               numExpected++;
+               System.out.println(firstSNinWindow + i);
+            }
+         }
+         
+         System.out.println("Number of packets expected: " + numExpected);
+         
+         printBool(receivedCorrectly);
+         
+         // Read in packets:
+         for (int newPacNum = 0; newPacNum < numExpected; newPacNum++) {
+            // Receive a packet:
+            byte[] receiveData = new byte[Packet.maxPacketSize];
+            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            clientSocket.receive(receivePacket);
+            System.out.println("Recieved a packet!"); 
+            receiveData = receivePacket.getData();
+         
+            Packet packet = new Packet(receiveData);
+            int sequenceNumber = (firstSNinWindow / maxSN) * maxSN + packet.getSequenceNum();
+            // TODO: remove
+            System.out.println(packet.getSequenceNum()+ "!");
+            
+            // Gremlin attack!
+            packet = gremlin(packet);
+         
+            // Error checking:
+            if (packet == null || errorDetected(packet)) {
+               receivedCorrectly[sequenceNumber % maxSN] = false;
+               continue;
+            }
+            
+            System.out.println("Setting " + (sequenceNumber % maxSN) + " to true");
+            receivedCorrectly[sequenceNumber % maxSN] = true;
+         
+            //System.out.println(packet.toString()); 
+            
+            // Add the new packet to the correct spot in the ArrayList:
+            if (packetsList.size() == sequenceNumber) {
+               packetsList.add(packet);
+            }
+            else if (packetsList.size() < sequenceNumber) {
+               for (int i = packetsList.size(); i < sequenceNumber; i++) {
+                  packetsList.add(null);
+               }
+               packetsList.add(sequenceNumber, packet);
+            }
+            else {
+               packetsList.add(sequenceNumber, packet);
+            }
+         
+            // Check if this is the last packet:
+            receivedLastPacket = packet.lastPacket();
+            if (receivedLastPacket) {
+               System.out.println("Found the last packet!");
+               for (int packetsLeft = newPacNum + 1; packetsLeft < numAcks; packetsLeft++) {
+                  receivedCorrectly[(firstSNinWindow + packetsLeft) % maxSN] = true;
+               }
+               numAcksSent = newPacNum + 1;
+               break;
+            }
+            System.out.println("Recieved packet " + packet.getSequenceNum()+ " correctly!");
+         }
+         
+         // Make ACK/NAK vector
+         int firstIndex = firstSNinWindow % maxSN;
+         int lastIndex = (firstSNinWindow + numAcksSent) % maxSN;
+         boolean[] ACKvector = new boolean[numAcksSent];
+         if (firstIndex > lastIndex) {
+            for (int index = 0; index < maxSN - firstIndex; index++) {
+               ACKvector[index] = receivedCorrectly[firstIndex + index];
+            }
+            for (int index = 0; index < lastIndex; index++) {
+               ACKvector[index + (maxSN - firstIndex)] = receivedCorrectly[index];
+            }
+         }
+         else {
+            ACKvector = Arrays.copyOfRange(receivedCorrectly, firstIndex, lastIndex);
+         }
+         Packet packetACK = new Packet(firstSNinWindow, ACKvector, numAcksSent);
+         
+         // Send ACK/NAK vector
+         byte[] packetBytes = packetACK.toByteArray();
+         DatagramPacket sendPacket = new DatagramPacket(packetBytes, packetBytes.length, IPAddress, portNumber);
+         clientSocket.send(sendPacket);
+         System.out.println("Sent an ACK vector!");
+         packetACK.printACK();
+         System.out.println("Num acks: " + packetACK.getNumOfAcks());
+         
+         // Check if we're totally done
+         if (receivedLastPacket) {
+            totallyDone = true;
+            for (int i = 0; i < numAcks; i++) {
+               totallyDone = totallyDone && receivedCorrectly[(firstSNinWindow + i) % maxSN];
+            }
+         }
+         
+         // Move window forward
+         while (receivedCorrectly[firstSNinWindow % maxSN]) {
+            receivedCorrectly[(firstSNinWindow + numAcks) % maxSN] = false;
+            firstSNinWindow++;
+         }
+         
+      } while (!totallyDone);
+   
+      return packetsList;
+   }
+
+   
+   
    /**
     * TODO: Change this to Selective Repeat.
     * TODO: Add in Gremlin function for each packet.
@@ -60,6 +190,7 @@ class UDPClient {
     * @param clientSocket: a DatagramSocket through which to recieve packets
     * @return a list of recieved packets
     */
+    /*
    public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
       boolean receivedLastPacket = false;
       ArrayList<Packet> packetsList = new ArrayList<Packet>();
@@ -71,6 +202,7 @@ class UDPClient {
       // Read in packets, and sort them:
       do {
          boolean[] receivedCorrectly = new boolean[numAcks];
+         int numAcksSent = numAcks;
          
          // Read in 8 packets at a time:
          for (int incomingPacketNum = 0; incomingPacketNum < numAcks; incomingPacketNum++) {
@@ -82,12 +214,13 @@ class UDPClient {
          
             Packet packet = new Packet(receiveData);
             // TODO: remove
-            System.out.println("Recieved packet " + packet.getSequenceNum()+ "!");
+            System.out.println(packet.getSequenceNum()+ "!");
             
             packet = gremlin(packet);
          
             if (packet == null || errorDetected(packet)) {
                receivedCorrectly[incomingPacketNum] = false;
+               numAcksSent = incomingPacketNum + 1;
                break;
             }
             
@@ -113,20 +246,23 @@ class UDPClient {
                for (int packetsLeft = incomingPacketNum + 1; packetsLeft < numAcks; packetsLeft++) {
                   receivedCorrectly[packetsLeft] = true;
                }
+               numAcksSent = incomingPacketNum + 1;
                break;
             }
+            System.out.println("Recieved packet " + packet.getSequenceNum()+ " correctly!");
          }
          
-         printBool(receivedCorrectly);
+         printBool(receivedCorrectly, numAcksSent);
          
          // Make ACK/NAK vector
-         Packet packetACK = new Packet(firstSNinWindow, receivedCorrectly);
+         Packet packetACK = new Packet(firstSNinWindow, receivedCorrectly, numAcksSent);
          
          // Send ACK/NAK vector
          byte[] packetBytes = packetACK.toByteArray();
          DatagramPacket sendPacket = new DatagramPacket(packetBytes, packetBytes.length, IPAddress, portNumber);
          clientSocket.send(sendPacket);
          System.out.println("Sent an ACK vector!");
+         System.out.println("Num acks: " + packetACK.getNumOfAcks());
          
          // Check if we're totally done
          if (receivedLastPacket) {
@@ -159,6 +295,7 @@ class UDPClient {
    
       return packetsList;
    }
+   */
    
    public static void printBool(boolean[] arr) {
       String result = "";

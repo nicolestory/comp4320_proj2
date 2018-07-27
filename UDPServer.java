@@ -28,29 +28,20 @@ class UDPServer {
       serverSocket = new DatagramSocket(portNumber);
       byte[] receiveData;
       
-      while(true)
-      {
-         receiveData = new byte[1024];
-         DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-         System.out.println("Ready to recieve HTTP requests");
-         serverSocket.receive(receivePacket);
-         int port = receivePacket.getPort();
-         System.out.println("Recieved a packet on port " + port + "!");
-         String request = new String(receivePacket.getData());
-         InetAddress IPAddress = receivePacket.getAddress();
+      receiveData = new byte[1024];
+      DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+      System.out.println("Ready to recieve HTTP requests");
+      serverSocket.receive(receivePacket);
+      int port = receivePacket.getPort();
+      System.out.println("Recieved a packet on port " + port + "!");
+      String request = new String(receivePacket.getData());
+      InetAddress IPAddress = receivePacket.getAddress();
          
          // Segment packets and send them
-         ArrayList<Packet> packets = segmentation(request);
-         if (packets == null) {
-            continue;
-         }
-         sendPackets(packets, serverSocket, IPAddress, port);
+      ArrayList<Packet> packets = segmentation(request);
+      sendPackets(packets, serverSocket, IPAddress, port);
          
-         System.out.println();
-         
-         //TODO: Remove
-         //break;
-      }
+      System.out.println();
    }
    
    public static void printBool(boolean[] arr) {
@@ -61,6 +52,15 @@ class UDPServer {
       System.out.println(result);
    }
    
+   
+   /**
+    * Selective Repeat, sends packets.
+    * 
+    * @param packetList: a list of packets to be sent
+    * @param serverSocket: a DatagramSocket to send packets through
+    * @param IPAddress: the IP of the client
+    * @param port: the port of the client process
+    */
    public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
       InetAddress IPAddress, int port) throws Exception {
       int firstSNinWindow = 0;
@@ -104,8 +104,6 @@ class UDPServer {
          int firstACK = ACKvector.getACKNum();
          numOfAcks = ACKvector.getNumOfAcks();
          
-         System.out.println("numOfAcks "+numOfAcks);
-         
          ACKvector.printACK();
          
          // Adjust ACK bools:
@@ -127,131 +125,10 @@ class UDPServer {
          if (firstSNinWindow >= packetList.size()) {
             totallyDone = true;
          }
-         
-         // Temp: Slow everything down a bit
-         /*
-         try {
-            Thread.sleep(500);
-         }
-         catch (Exception e) {
-            continue;
-         }
-         */
       }
       
       System.out.println("All packets have been transmitted correctly!");
    }
-   
-   /**
-    * TODO: Implement Selective Repeat here.
-    * Current stuff is a working version that just sends the packets.
-    * 
-    * @param packetList: a list of packets to be sent
-    * @param serverSocket: a DatagramSocket to send packets through
-    * @param IPAddress: the IP of the client
-    * @param port: the port of the client process
-    */
-    /*
-   public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
-      InetAddress IPAddress, int port) throws Exception {
-      if (packetList == null) {
-         return;
-      }
-      
-      int firstSNinWindow = 0;
-      int numAcks = Packet.numAcksAllowed;
-      boolean[] sentCorrectly = new boolean[numAcks];
-      boolean totallyDone = false;
-      int numOfAcks = numAcks;
-      
-      while (!totallyDone) {
-         // Figure out which packets to send:
-         ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
-         for (int i = 0; i < numOfAcks; i++) {
-            if (!sentCorrectly[i] && (firstSNinWindow + i) < packetList.size()) {
-               packetsToSend.add(packetList.get(firstSNinWindow + i));
-            }
-         }
-         
-         // Send the packets:
-         send(packetsToSend, serverSocket, IPAddress, port);
-         
-         // Wait for ACK/NAK vector:
-         Packet ACKvector = waitForACK();
-         boolean[] newACKs = ACKvector.decodeACK();
-         int firstACK = ACKvector.getACKNum();
-         numOfAcks = ACKvector.getNumOfAcks();
-         
-         ACKvector.printACK();
-         
-         // Error checking, remove later
-         /*
-         System.out.println("Got ACK vector for " + firstACK);
-         printBool(newACKs);
-         System.out.println("Old sentCorrectly");
-         printBool(sentCorrectly);
-         //System.out.format("firstSNinWindow %d, firstACK %d\n",firstSNinWindow, firstACK);
-         
-         // Move window:
-         int shift = 0;
-         int firstNum = Math.max(firstSNinWindow, firstACK);
-         int numCompares = 8 - Math.abs(firstSNinWindow - firstACK);
-         //System.out.format("shift %d, firstNum %d, numCompares %d\n",shift, firstNum, numCompares);
-         // Update sentCorrectly:
-         for (int i = 0; i <= numCompares; i++) {
-            int index = i % numAcks;
-            //System.out.println("index : "+index);
-            sentCorrectly[index] = sentCorrectly[index] || newACKs[index];
-         }
-         System.out.println("Mixed sentCorrectly with new ACKS");
-         printBool(sentCorrectly, 8);
-         
-         // Count num of shifts
-         while (shift < numAcks && sentCorrectly[shift]) {
-            shift++;
-         }
-         
-         System.out.println("Shift: " + shift);
-         
-         // Move window
-         for (int i = 0; i < numAcks; i++) {
-            if ((i < (shift - 1)) && ((i + shift) < numAcks)) {
-               sentCorrectly[i] = sentCorrectly[i + shift];
-               //System.out.println("true: i: " + i);
-            }
-            else {
-               sentCorrectly[i] = false;
-               //System.out.println("fasle: i: " + i);
-            }
-         }
-         firstSNinWindow += shift;
-         
-         //System.out.println("Shifted sentCorrectly by "+shift);
-         //printBool(sentCorrectly);
-         
-         // Check if we're totally done transmitting:
-         if (firstSNinWindow >= packetList.size()) {
-            totallyDone = true;
-         }
-         //else if (firstSNinWindow + numAcks >= packetList.size()) {
-            
-         //}
-         
-         
-         //System.out.println("firstSNinWindow: "+firstSNinWindow);
-         
-         
-         //TODO: Remove
-         try {
-            Thread.sleep(500);
-         }
-         catch (Exception e) {
-            continue;
-         }
-      }
-      
-      System.out.println("All packets have been transmitted correctly!");
-   } */
    
    /**
     * Sends each packet to the client server.
@@ -269,18 +146,7 @@ class UDPServer {
             System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
          }
          System.out.println("Sent a packet back.");
-         //System.out.println(packet.toString());
-         System.out.println("SN: "+packet.getSequenceNum());
-         
-         //TODO: Remove
-         /*
-         try {
-            Thread.sleep(100);
-         }
-         catch (Exception e) {
-            continue;
-         }
-         */
+         System.out.println(packet.toString());
       }
    }
    

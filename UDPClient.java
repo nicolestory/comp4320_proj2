@@ -75,9 +75,6 @@ class UDPClient {
       
       // Read in packets, and sort them:
       do {
-         System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
-         
-         //int numAcksSent = numAcks;
          int numExpected = 0;
          for (int i = 0; i < numAcks; i++) {
             if (!receivedCorrectly[(firstSNinWindow + i) % maxSN]) {
@@ -93,7 +90,7 @@ class UDPClient {
          // Read in packets:
          numExpected = Math.min(lastFlag, numExpected);
          for (int newPacNum = 0; newPacNum < numExpected; newPacNum++) {
-            //numAcksSent = newPacNum + 1;
+         
             // Receive a packet:
             byte[] receiveData = new byte[Packet.maxPacketSize];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -103,8 +100,6 @@ class UDPClient {
          
             Packet packet = new Packet(receiveData);
             int sequenceNumber = (firstSNinWindow / maxSN) * maxSN + packet.getSequenceNum();
-            // TODO: remove
-            System.out.println(packet.getSequenceNum()+ "!");
             
             // Gremlin attack!
             packet = gremlin(packet);
@@ -113,16 +108,14 @@ class UDPClient {
             if ((packet == null || errorDetected(packet)) ) {// && !receivedCorrectly[sequenceNumber % maxSN]) {
                receivedCorrectly[sequenceNumber % maxSN] = false;
                if (packet != null && (packet.getLastIndex() < Packet.headerSize + 2)) {
-                  //numAcksSent = newPacNum + 1;
                   break;
                }
                continue;
             }
             
-            System.out.println("Setting " + (sequenceNumber % maxSN) + " to true");
             receivedCorrectly[sequenceNumber % maxSN] = true;
          
-            //System.out.println(packet.toString()); 
+            System.out.println(packet.toString()); 
             
             // Add the new packet to the correct spot in the ArrayList:
             if (packetsList.size() == sequenceNumber) {
@@ -144,10 +137,8 @@ class UDPClient {
                System.out.println("Found the last packet!");
                lastFlag = 1;
                lastSN = sequenceNumber;
-               //numAcksSent = newPacNum + 1;
                break;
             }
-            System.out.println("Recieved packet " + packet.getSequenceNum()+ " correctly!");
          }
          
          // Make ACK/NAK vector
@@ -164,7 +155,6 @@ class UDPClient {
          clientSocket.send(sendPacket);
          System.out.println("Sent an ACK vector!");
          packetACK.printACK();
-         System.out.println("Num acks: " + packetACK.getNumOfAcks());
          
          // Check if we're totally done
          if (receivedLastPacket) {
@@ -215,7 +205,7 @@ class UDPClient {
       
       if (packet.getChecksum() != packet.generateChecksum()) {
          System.out.println("An error was detected in packet " + packet.getSequenceNum() + ":");
-         //System.out.println(packet.toString());
+         System.out.println(packet.toString());
          return true;
       }
       return false;
@@ -262,7 +252,7 @@ class UDPClient {
       for (int i = 0; i < numBytesDamaged; i++) {
          int byteToChange = (int) (Math.random() * packetData.length);
          packetData[byteToChange] = (byte) (packetData[byteToChange] ^ 0xFF);
-         //System.out.println("Changed a byte!");
+         System.out.println("Changed a byte!");
       }
       
       packet.setData(packetData);
@@ -278,10 +268,8 @@ class UDPClient {
     */
    private static void writeToFile(ArrayList<Packet> packetsList) throws Exception {
       FileOutputStream out = new FileOutputStream("new_" + fileName);
-      System.out.println("Writing to file");
       
       for (int i = 0; i < packetsList.size() - 1; i++) {
-         System.out.println(i);
          out.write(packetsList.get(i).getData());
       }
       out.close();

@@ -60,6 +60,77 @@ class UDPServer {
       System.out.println(result);
    }
    
+   public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
+      InetAddress IPAddress, int port) throws Exception {
+      int firstSNinWindow = 0;
+      int numAcks = Packet.numAcksAllowed;
+      int maxSN = Packet.maxSequenceNum;
+      boolean[] sentCorrectly = new boolean[Packet.maxSequenceNum];
+      boolean totallyDone = false;
+      int numOfAcks = numAcks;
+      
+      System.out.println("Number of packets: " + packetList.size() + "\n\n");
+      
+      while (!totallyDone) {
+         System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
+      
+         // Figure out which packets to send:
+         ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
+         for (int i = 0; i < numOfAcks; i++) {
+            if (!sentCorrectly[(firstSNinWindow + i) % maxSN] && (firstSNinWindow + i) < packetList.size()) {
+               packetsToSend.add(packetList.get(firstSNinWindow + i));
+            }
+         }
+         
+         System.out.println("Num packets to send: " + packetsToSend.size());
+      
+         printBool(sentCorrectly);
+         
+         // Send the packets:
+         send(packetsToSend, serverSocket, IPAddress, port);
+         
+         // Wait for ACK/NAK vector:
+         Packet ACKvector = waitForACK();
+         boolean[] newACKs = ACKvector.decodeACK();
+         int firstACK = ACKvector.getACKNum();
+         numOfAcks = ACKvector.getNumOfAcks();
+         
+         System.out.println("numOfAcks "+numOfAcks);
+         
+         ACKvector.printACK();
+         
+         // Adjust ACK bools:
+         if (Math.abs(firstACK - (firstSNinWindow % maxSN)) > numAcks) {
+            firstACK += firstSNinWindow / maxSN; // Adjust the firstACK number
+         }
+         for (int i = 0; i < numOfAcks; i++) {
+            int index = (firstSNinWindow + i) % maxSN;
+            sentCorrectly[index] = sentCorrectly[index] || newACKs[i];
+         }
+         
+         // Move window forwards:
+         while (sentCorrectly[firstSNinWindow]) {
+            sentCorrectly[(firstSNinWindow + numAcks) % maxSN] = false;
+            firstSNinWindow++;
+         }
+         
+         // Check if we're totally done:
+         if (firstSNinWindow >= packetList.size()) {
+            totallyDone = true;
+         }
+         
+         // Temp: Slow everything down a bit
+         try {
+            Thread.sleep(500);
+         }
+         catch (Exception e) {
+            continue;
+         }
+      }
+      
+      System.out.println("All packets have been transmitted correctly!");
+   }
+   
    /**
     * TODO: Implement Selective Repeat here.
     * Current stuff is a working version that just sends the packets.
@@ -69,6 +140,7 @@ class UDPServer {
     * @param IPAddress: the IP of the client
     * @param port: the port of the client process
     */
+    /*
    public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
       InetAddress IPAddress, int port) throws Exception {
       if (packetList == null) {
@@ -79,14 +151,12 @@ class UDPServer {
       int numAcks = Packet.numAcksAllowed;
       boolean[] sentCorrectly = new boolean[numAcks];
       boolean totallyDone = false;
+      int numOfAcks = numAcks;
       
       while (!totallyDone) {
-         System.out.println("Starting while !totallyDone");
-         System.out.println("firstSNinWindow: "+firstSNinWindow);
-         
          // Figure out which packets to send:
          ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
-         for (int i = 0; i < sentCorrectly.length; i++) {
+         for (int i = 0; i < numOfAcks; i++) {
             if (!sentCorrectly[i] && (firstSNinWindow + i) < packetList.size()) {
                packetsToSend.add(packetList.get(firstSNinWindow + i));
             }
@@ -99,13 +169,16 @@ class UDPServer {
          Packet ACKvector = waitForACK();
          boolean[] newACKs = ACKvector.decodeACK();
          int firstACK = ACKvector.getACKNum();
+         numOfAcks = ACKvector.getNumOfAcks();
+         
+         ACKvector.printACK();
          
          // Error checking, remove later
          /*
          System.out.println("Got ACK vector for " + firstACK);
          printBool(newACKs);
          System.out.println("Old sentCorrectly");
-         printBool(sentCorrectly); */
+         printBool(sentCorrectly);
          //System.out.format("firstSNinWindow %d, firstACK %d\n",firstSNinWindow, firstACK);
          
          // Move window:
@@ -119,8 +192,8 @@ class UDPServer {
             //System.out.println("index : "+index);
             sentCorrectly[index] = sentCorrectly[index] || newACKs[index];
          }
-         //System.out.println("Mixed sentCorrectly with new ACKS");
-         //printBool(sentCorrectly);
+         System.out.println("Mixed sentCorrectly with new ACKS");
+         printBool(sentCorrectly, 8);
          
          // Count num of shifts
          while (shift < numAcks && sentCorrectly[shift]) {
@@ -167,7 +240,7 @@ class UDPServer {
       }
       
       System.out.println("All packets have been transmitted correctly!");
-   }
+   } */
    
    /**
     * Sends each packet to the client server.

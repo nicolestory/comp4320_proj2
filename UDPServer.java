@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Timer;
 
 class UDPServer {
 
@@ -395,5 +396,14 @@ class UDPServer {
          portNumber = tempPortNumber;
       }
       return true;
+   }
+
+   public static void createTimer(long timeout) {
+	PacketTimer pt = new PacketTimer(timeout);
+	Timer t = new Timer();
+	long end = System.currentTimeMillis() + timeout + 100;
+	t.schedule(pt, 0, 1);
+	while (System.currentTimeMillis() < end) {}
+	t.cancel();
    }
 }

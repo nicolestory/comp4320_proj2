@@ -52,7 +52,15 @@ class UDPClient {
       launchBrowser("new_" + fileName);
    }
    
-   
+   /**
+    * TODO: Change this to Selective Repeat.
+    * TODO: Add in Gremlin function for each packet.
+    * 
+    * Recieves packets from UDPServer until a packet with a null byte on the end is recieved.
+    * 
+    * @param clientSocket: a DatagramSocket through which to recieve packets
+    * @return a list of recieved packets
+    */
    public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
       boolean receivedLastPacket = false;
       ArrayList<Packet> packetsList = new ArrayList<Packet>();
@@ -60,6 +68,8 @@ class UDPClient {
       int maxSN = Packet.maxSequenceNum;
       int firstSNinWindow = 0;
       boolean[] receivedCorrectly = new boolean[maxSN];
+      int lastFlag = 9;
+      int lastSN = -1;
       
       boolean totallyDone = false;
       
@@ -67,7 +77,7 @@ class UDPClient {
       do {
          System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
          
-         int numAcksSent = numAcks;
+         //int numAcksSent = numAcks;
          int numExpected = 0;
          for (int i = 0; i < numAcks; i++) {
             if (!receivedCorrectly[(firstSNinWindow + i) % maxSN]) {
@@ -81,7 +91,9 @@ class UDPClient {
          printBool(receivedCorrectly);
          
          // Read in packets:
+         numExpected = Math.min(lastFlag, numExpected);
          for (int newPacNum = 0; newPacNum < numExpected; newPacNum++) {
+            //numAcksSent = newPacNum + 1;
             // Receive a packet:
             byte[] receiveData = new byte[Packet.maxPacketSize];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -98,8 +110,12 @@ class UDPClient {
             packet = gremlin(packet);
          
             // Error checking:
-            if (packet == null || errorDetected(packet)) {
+            if ((packet == null || errorDetected(packet)) ) {// && !receivedCorrectly[sequenceNumber % maxSN]) {
                receivedCorrectly[sequenceNumber % maxSN] = false;
+               if (packet != null && (packet.getLastIndex() < Packet.headerSize + 2)) {
+                  //numAcksSent = newPacNum + 1;
+                  break;
+               }
                continue;
             }
             
@@ -126,31 +142,21 @@ class UDPClient {
             receivedLastPacket = packet.lastPacket();
             if (receivedLastPacket) {
                System.out.println("Found the last packet!");
-               for (int packetsLeft = newPacNum + 1; packetsLeft < numAcks; packetsLeft++) {
-                  receivedCorrectly[(firstSNinWindow + packetsLeft) % maxSN] = true;
-               }
-               numAcksSent = newPacNum + 1;
+               lastFlag = 1;
+               lastSN = sequenceNumber;
+               //numAcksSent = newPacNum + 1;
                break;
             }
             System.out.println("Recieved packet " + packet.getSequenceNum()+ " correctly!");
          }
          
          // Make ACK/NAK vector
-         int firstIndex = firstSNinWindow % maxSN;
-         int lastIndex = (firstSNinWindow + numAcksSent) % maxSN;
-         boolean[] ACKvector = new boolean[numAcksSent];
-         if (firstIndex > lastIndex) {
-            for (int index = 0; index < maxSN - firstIndex; index++) {
-               ACKvector[index] = receivedCorrectly[firstIndex + index];
-            }
-            for (int index = 0; index < lastIndex; index++) {
-               ACKvector[index + (maxSN - firstIndex)] = receivedCorrectly[index];
-            }
+         boolean[] ACKvector = new boolean[numExpected];
+         for (int index = firstSNinWindow; index < firstSNinWindow + numExpected; index++) {
+            ACKvector[(index - firstSNinWindow) % maxSN] = receivedCorrectly[index % maxSN];
          }
-         else {
-            ACKvector = Arrays.copyOfRange(receivedCorrectly, firstIndex, lastIndex);
-         }
-         Packet packetACK = new Packet(firstSNinWindow, ACKvector, numAcksSent);
+         
+         Packet packetACK = new Packet(firstSNinWindow, ACKvector, numExpected);
          
          // Send ACK/NAK vector
          byte[] packetBytes = packetACK.toByteArray();
@@ -163,8 +169,8 @@ class UDPClient {
          // Check if we're totally done
          if (receivedLastPacket) {
             totallyDone = true;
-            for (int i = 0; i < numAcks; i++) {
-               totallyDone = totallyDone && receivedCorrectly[(firstSNinWindow + i) % maxSN];
+            for (int i = firstSNinWindow; i < lastSN; i++) {
+               totallyDone = totallyDone && receivedCorrectly[i % maxSN];
             }
          }
          
@@ -175,127 +181,12 @@ class UDPClient {
          }
          
       } while (!totallyDone);
+      
+      System.out.println("All packets have been received correctly!");
    
       return packetsList;
    }
-
    
-   
-   /**
-    * TODO: Change this to Selective Repeat.
-    * TODO: Add in Gremlin function for each packet.
-    * 
-    * Recieves packets from UDPServer until a packet with a null byte on the end is recieved.
-    * 
-    * @param clientSocket: a DatagramSocket through which to recieve packets
-    * @return a list of recieved packets
-    */
-    /*
-   public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
-      boolean receivedLastPacket = false;
-      ArrayList<Packet> packetsList = new ArrayList<Packet>();
-      int numAcks = Packet.numAcksAllowed;
-      int firstSNinWindow = 0;
-      
-      boolean totallyDone = false;
-      
-      // Read in packets, and sort them:
-      do {
-         boolean[] receivedCorrectly = new boolean[numAcks];
-         int numAcksSent = numAcks;
-         
-         // Read in 8 packets at a time:
-         for (int incomingPacketNum = 0; incomingPacketNum < numAcks; incomingPacketNum++) {
-            byte[] receiveData = new byte[Packet.maxPacketSize];
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            clientSocket.receive(receivePacket);
-            System.out.println("Recieved a packet!"); 
-            receiveData = receivePacket.getData();
-         
-            Packet packet = new Packet(receiveData);
-            // TODO: remove
-            System.out.println(packet.getSequenceNum()+ "!");
-            
-            packet = gremlin(packet);
-         
-            if (packet == null || errorDetected(packet)) {
-               receivedCorrectly[incomingPacketNum] = false;
-               numAcksSent = incomingPacketNum + 1;
-               break;
-            }
-            
-            receivedCorrectly[incomingPacketNum] = true;
-         
-            //System.out.println(packet.toString()); 
-            int sequenceNumber = firstSNinWindow + incomingPacketNum;
-            if (packetsList.size() == sequenceNumber) {
-               packetsList.add(packet);
-            }
-            else if (packetsList.size() < sequenceNumber) {
-               for (int i = packetsList.size(); i < sequenceNumber; i++) {
-                  packetsList.add(null);
-               }
-               packetsList.add(sequenceNumber, packet);
-            }
-            else {
-               packetsList.add(sequenceNumber, packet);
-            }
-         
-            receivedLastPacket = packet.lastPacket();
-            if (receivedLastPacket) {
-               for (int packetsLeft = incomingPacketNum + 1; packetsLeft < numAcks; packetsLeft++) {
-                  receivedCorrectly[packetsLeft] = true;
-               }
-               numAcksSent = incomingPacketNum + 1;
-               break;
-            }
-            System.out.println("Recieved packet " + packet.getSequenceNum()+ " correctly!");
-         }
-         
-         printBool(receivedCorrectly, numAcksSent);
-         
-         // Make ACK/NAK vector
-         Packet packetACK = new Packet(firstSNinWindow, receivedCorrectly, numAcksSent);
-         
-         // Send ACK/NAK vector
-         byte[] packetBytes = packetACK.toByteArray();
-         DatagramPacket sendPacket = new DatagramPacket(packetBytes, packetBytes.length, IPAddress, portNumber);
-         clientSocket.send(sendPacket);
-         System.out.println("Sent an ACK vector!");
-         System.out.println("Num acks: " + packetACK.getNumOfAcks());
-         
-         // Check if we're totally done
-         if (receivedLastPacket) {
-            totallyDone = true;
-            for (int ACKnum = 0; ACKnum < numAcks; ACKnum++) {
-               totallyDone = totallyDone && receivedCorrectly[ACKnum];
-            }
-         }
-         
-         // Move window forward
-         int shift = 0; // Count num of shifts
-         while (shift < numAcks && receivedCorrectly[shift]) {
-            shift++;
-         }
-         
-         // Move window
-         for (int i = 0; i < numAcks; i++) {
-            // If we need to shift the array over:
-            if ((i < (shift - 1)) && ((i + shift) < numAcks)) {
-               receivedCorrectly[i] = receivedCorrectly[i + shift];
-            }
-            // For packets past the 
-            else {
-               receivedCorrectly[i] = false;
-            }
-         }
-         firstSNinWindow += shift;
-         
-      } while (!totallyDone);
-   
-      return packetsList;
-   }
-   */
    
    public static void printBool(boolean[] arr) {
       String result = "";
@@ -387,8 +278,11 @@ class UDPClient {
     */
    private static void writeToFile(ArrayList<Packet> packetsList) throws Exception {
       FileOutputStream out = new FileOutputStream("new_" + fileName);
-      for (Packet packet : packetsList) {
-         out.write(packet.getData());
+      System.out.println("Writing to file");
+      
+      for (int i = 0; i < packetsList.size() - 1; i++) {
+         System.out.println(i);
+         out.write(packetsList.get(i).getData());
       }
       out.close();
       System.out.println("Successfully wrote to file new_" + fileName);

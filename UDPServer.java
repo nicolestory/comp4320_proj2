@@ -63,8 +63,8 @@ class UDPServer {
    public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
       InetAddress IPAddress, int port) throws Exception {
       int firstSNinWindow = 0;
-      int numAcks = Packet.numAcksAllowed;
-      int maxSN = Packet.maxSequenceNum;
+      final int numAcks = Packet.numAcksAllowed;
+      final int maxSN = Packet.maxSequenceNum;
       boolean[] sentCorrectly = new boolean[Packet.maxSequenceNum];
       boolean totallyDone = false;
       int numOfAcks = numAcks;
@@ -73,10 +73,18 @@ class UDPServer {
       
       while (!totallyDone) {
          System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
+         
+         int numExpected = 0;
+         for (int i = 0; i < numAcks; i++) {
+            if (!sentCorrectly[(firstSNinWindow + i) % maxSN]) {
+               numExpected++;
+               System.out.println(firstSNinWindow + i);
+            }
+         }
       
          // Figure out which packets to send:
          ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
-         for (int i = 0; i < numOfAcks; i++) {
+         for (int i = 0; i < numAcks; i++) {
             if (!sentCorrectly[(firstSNinWindow + i) % maxSN] && (firstSNinWindow + i) < packetList.size()) {
                packetsToSend.add(packetList.get(firstSNinWindow + i));
             }
@@ -109,7 +117,7 @@ class UDPServer {
          }
          
          // Move window forwards:
-         while (sentCorrectly[firstSNinWindow]) {
+         while (sentCorrectly[firstSNinWindow % maxSN]) {
             sentCorrectly[(firstSNinWindow + numAcks) % maxSN] = false;
             firstSNinWindow++;
          }
@@ -120,12 +128,14 @@ class UDPServer {
          }
          
          // Temp: Slow everything down a bit
+         /*
          try {
             Thread.sleep(500);
          }
          catch (Exception e) {
             continue;
          }
+         */
       }
       
       System.out.println("All packets have been transmitted correctly!");
@@ -262,12 +272,14 @@ class UDPServer {
          System.out.println("SN: "+packet.getSequenceNum());
          
          //TODO: Remove
+         /*
          try {
             Thread.sleep(100);
          }
          catch (Exception e) {
             continue;
          }
+         */
       }
    }
    

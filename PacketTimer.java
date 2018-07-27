@@ -1,28 +1,22 @@
+import java.util.ArrayList;
 import java.util.TimerTask;
 import java.util.Timer;
   
 class PacketTimer extends TimerTask {
-   public static long end;
-   public static boolean timedOut;
-
-   public PacketTimer(long _timeout) {
-	end = System.currentTimeMillis() + _timeout;
-	timedOut = false;
+   public Packet packet;
+   public Timer timer;
+   
+   public PacketTimer(Packet pkt, Timer tmr) {
+      packet = pkt;
+      timer = tmr;
    }
    
    public void run() {
-	if (System.currentTimeMillis() >= end) {
-		timedOut = true;
-		cancel();
-	}
+      ArrayList<Packet> pkt = new ArrayList<Packet>();
+      pkt.add(packet);
+      UDPServer.send(pkt);
+      System.out.println("Timed Out!");
+      cancel(); 
+      timer.schedule(new PacketTimer(packet, timer), 40);
    }
-
-   /*public static void main(String[] args) {
-	PacketTimer p = new PacketTimer(5000);
-	Timer t = new Timer();
-	
-	t.schedule(p, 0, 1);
-	while (System.currentTimeMillis() < end + 100) {}
-	t.cancel();
-   }*/
 }

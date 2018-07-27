@@ -53,8 +53,7 @@ class UDPClient {
    }
    
    /**
-    * TODO: Change this to Selective Repeat.
-    * TODO: Add in Gremlin function for each packet.
+    * Selective repeat, receives packets
     * 
     * Recieves packets from UDPServer until a packet with a null byte on the end is recieved.
     * 
@@ -68,6 +67,7 @@ class UDPClient {
       int maxSN = Packet.maxSequenceNum;
       int firstSNinWindow = 0;
       boolean[] receivedCorrectly = new boolean[maxSN];
+      Packet[] packetArray = new Packet[maxSN];
       int lastFlag = 9;
       int lastSN = -1;
       
@@ -79,13 +79,8 @@ class UDPClient {
          for (int i = 0; i < numAcks; i++) {
             if (!receivedCorrectly[(firstSNinWindow + i) % maxSN]) {
                numExpected++;
-               System.out.println(firstSNinWindow + i);
             }
          }
-         
-         System.out.println("Number of packets expected: " + numExpected);
-         
-         printBool(receivedCorrectly);
          
          // Read in packets:
          numExpected = Math.min(lastFlag, numExpected);
@@ -95,7 +90,7 @@ class UDPClient {
             byte[] receiveData = new byte[Packet.maxPacketSize];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             clientSocket.receive(receivePacket);
-            System.out.println("Recieved a packet!"); 
+            System.out.println("Recieved a packet!");
             receiveData = receivePacket.getData();
          
             Packet packet = new Packet(receiveData);
@@ -105,8 +100,7 @@ class UDPClient {
             packet = gremlin(packet);
          
             // Error checking:
-            if ((packet == null || errorDetected(packet)) ) {// && !receivedCorrectly[sequenceNumber % maxSN]) {
-               receivedCorrectly[sequenceNumber % maxSN] = false;
+            if ((packet == null || errorDetected(packet)) ) {
                if (packet != null && (packet.getLastIndex() < Packet.headerSize + 2)) {
                   break;
                }
@@ -114,22 +108,9 @@ class UDPClient {
             }
             
             receivedCorrectly[sequenceNumber % maxSN] = true;
+            packetArray[sequenceNumber % maxSN] = packet;
          
             System.out.println(packet.toString()); 
-            
-            // Add the new packet to the correct spot in the ArrayList:
-            if (packetsList.size() == sequenceNumber) {
-               packetsList.add(packet);
-            }
-            else if (packetsList.size() < sequenceNumber) {
-               for (int i = packetsList.size(); i < sequenceNumber; i++) {
-                  packetsList.add(null);
-               }
-               packetsList.add(sequenceNumber, packet);
-            }
-            else {
-               packetsList.add(sequenceNumber, packet);
-            }
          
             // Check if this is the last packet:
             receivedLastPacket = packet.lastPacket();
@@ -154,7 +135,6 @@ class UDPClient {
          DatagramPacket sendPacket = new DatagramPacket(packetBytes, packetBytes.length, IPAddress, portNumber);
          clientSocket.send(sendPacket);
          System.out.println("Sent an ACK vector!");
-         packetACK.printACK();
          
          // Check if we're totally done
          if (receivedLastPacket) {
@@ -167,6 +147,8 @@ class UDPClient {
          // Move window forward
          while (receivedCorrectly[firstSNinWindow % maxSN]) {
             receivedCorrectly[(firstSNinWindow + numAcks) % maxSN] = false;
+            packetsList.add(packetArray[firstSNinWindow % maxSN]);
+            packetArray[firstSNinWindow % maxSN] = null;
             firstSNinWindow++;
          }
          
@@ -175,19 +157,6 @@ class UDPClient {
       System.out.println("All packets have been received correctly!");
    
       return packetsList;
-   }
-   
-   
-   public static void printBool(boolean[] arr) {
-      String result = "";
-      for (int i = 0; i < arr.length; i++) {
-         result += arr[i] + " ";
-      }
-      System.out.println(result);
-   }
-   
-   public static boolean[] moveWindow(boolean[] window) {
-      return null;
    }
    
    /**

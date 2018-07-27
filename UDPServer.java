@@ -11,6 +11,8 @@ class UDPServer {
     + "<portNumber>";
     
    private static DatagramSocket serverSocket;
+   private static int port;
+   private static InetAddress IPAddress;
 
    /**
     * Main. This is where the magic happens.
@@ -32,24 +34,16 @@ class UDPServer {
       DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
       System.out.println("Ready to recieve HTTP requests");
       serverSocket.receive(receivePacket);
-      int port = receivePacket.getPort();
+      port = receivePacket.getPort();
       System.out.println("Recieved a packet on port " + port + "!");
       String request = new String(receivePacket.getData());
-      InetAddress IPAddress = receivePacket.getAddress();
+      IPAddress = receivePacket.getAddress();
          
          // Segment packets and send them
       ArrayList<Packet> packets = segmentation(request);
-      sendPackets(packets, serverSocket, IPAddress, port);
+      sendPackets(packets);
          
       System.out.println();
-   }
-   
-   public static void printBool(boolean[] arr) {
-      String result = "";
-      for (int i = 0; i < arr.length; i++) {
-         result += arr[i] + " ";
-      }
-      System.out.println(result);
    }
    
    
@@ -61,50 +55,40 @@ class UDPServer {
     * @param IPAddress: the IP of the client
     * @param port: the port of the client process
     */
-   public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
-      InetAddress IPAddress, int port) throws Exception {
+   public static void sendPackets(ArrayList<Packet> packetList) throws Exception {
       int firstSNinWindow = 0;
       final int numAcks = Packet.numAcksAllowed;
       final int maxSN = Packet.maxSequenceNum;
       boolean[] sentCorrectly = new boolean[Packet.maxSequenceNum];
+      Timer[] timers = new Timer[maxSN];
       boolean totallyDone = false;
       int numOfAcks = numAcks;
       
       System.out.println("Number of packets: " + packetList.size() + "\n\n");
       
-      while (!totallyDone) {
-         System.out.println("\n\nTop of while loop **************************** " +firstSNinWindow);
-         
-         int numExpected = 0;
-         for (int i = 0; i < numAcks; i++) {
-            if (!sentCorrectly[(firstSNinWindow + i) % maxSN]) {
-               numExpected++;
-               System.out.println(firstSNinWindow + i);
-            }
-         }
-      
+      while (!totallyDone) {   
          // Figure out which packets to send:
          ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
          for (int i = 0; i < numAcks; i++) {
             if (!sentCorrectly[(firstSNinWindow + i) % maxSN] && (firstSNinWindow + i) < packetList.size()) {
-               packetsToSend.add(packetList.get(firstSNinWindow + i));
+               Packet sendPacket = packetList.get(firstSNinWindow + i);
+               packetsToSend.add(sendPacket);
+               if (timers[(firstSNinWindow + i) % maxSN] == null) {
+                  Timer time = new Timer();
+                  time.schedule(new PacketTimer(sendPacket, time), 40);
+                  timers[(firstSNinWindow + i) % maxSN] = time;
+               }
             }
          }
          
-         System.out.println("Num packets to send: " + packetsToSend.size());
-      
-         printBool(sentCorrectly);
-         
          // Send the packets:
-         send(packetsToSend, serverSocket, IPAddress, port);
+         send(packetsToSend);
          
          // Wait for ACK/NAK vector:
          Packet ACKvector = waitForACK();
          boolean[] newACKs = ACKvector.decodeACK();
          int firstACK = ACKvector.getACKNum();
          numOfAcks = ACKvector.getNumOfAcks();
-         
-         ACKvector.printACK();
          
          // Adjust ACK bools:
          if (Math.abs(firstACK - (firstSNinWindow % maxSN)) > numAcks) {
@@ -113,11 +97,18 @@ class UDPServer {
          for (int i = 0; i < numOfAcks; i++) {
             int index = (firstSNinWindow + i) % maxSN;
             sentCorrectly[index] = sentCorrectly[index] || newACKs[i];
+            if (newACKs[i] && timers[i] != null) {
+               timers[i].cancel();
+            }
          }
          
          // Move window forwards:
          while (sentCorrectly[firstSNinWindow % maxSN]) {
             sentCorrectly[(firstSNinWindow + numAcks) % maxSN] = false;
+            if (timers[(firstSNinWindow + numAcks) % maxSN] != null) {
+               timers[(firstSNinWindow + numAcks) % maxSN].cancel();
+               timers[(firstSNinWindow + numAcks) % maxSN] = null;
+            }
             firstSNinWindow++;
          }
          
@@ -128,13 +119,19 @@ class UDPServer {
       }
       
       System.out.println("All packets have been transmitted correctly!");
+      
+      // Make sure all timers are stopped:
+      for (int i = 0; i < maxSN; i++) {
+         if (timers[i] != null) {
+            timers[i].cancel();
+         }
+      }
    }
    
    /**
     * Sends each packet to the client server.
     */
-   public static void send(ArrayList<Packet> packets, DatagramSocket serverSocket,
-   InetAddress IPAddress, int port) {
+   public static void send(ArrayList<Packet> packets) {
       DatagramPacket sendPacket;
       for (Packet packet : packets) {
          byte[] packetByte = packet.toByteArray();
@@ -262,14 +259,5 @@ class UDPServer {
          portNumber = tempPortNumber;
       }
       return true;
-   }
-
-   public static void createTimer(long timeout) {
-	PacketTimer pt = new PacketTimer(timeout);
-	Timer t = new Timer();
-	long end = System.currentTimeMillis() + timeout + 100;
-	t.schedule(pt, 0, 1);
-	while (System.currentTimeMillis() < end) {}
-	t.cancel();
    }
 }

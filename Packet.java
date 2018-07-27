@@ -83,6 +83,7 @@ class Packet {
          }
       }
       ACKNum = firstAckNum % maxSequenceNum;
+      lastIndex = headerSize + numAcksAllowed - 1;
    }
    
    /**

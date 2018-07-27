@@ -8,6 +8,8 @@ class UDPServer {
    private static int portNumber = 10052;
    private static String correctArgUsage = "Args should be in the following order:\n"
     + "<portNumber>";
+    
+   private static DatagramSocket serverSocket;
 
    /**
     * Main. This is where the magic happens.
@@ -22,7 +24,7 @@ class UDPServer {
       
       System.out.println("Starting UDP Server on port " + portNumber);
       
-      DatagramSocket serverSocket = new DatagramSocket(portNumber);
+      serverSocket = new DatagramSocket(portNumber);
       byte[] receiveData;
       
       while(true)
@@ -38,10 +40,24 @@ class UDPServer {
          
          // Segment packets and send them
          ArrayList<Packet> packets = segmentation(request);
+         if (packets == null) {
+            continue;
+         }
          sendPackets(packets, serverSocket, IPAddress, port);
          
          System.out.println();
+         
+         //TODO: Remove
+         //break;
       }
+   }
+   
+   public static void printBool(boolean[] arr) {
+      String result = "";
+      for (int i = 0; i < arr.length; i++) {
+         result += arr[i] + " ";
+      }
+      System.out.println(result);
    }
    
    /**
@@ -55,16 +71,23 @@ class UDPServer {
     */
    public static void sendPackets(ArrayList<Packet> packetList, DatagramSocket serverSocket,
       InetAddress IPAddress, int port) throws Exception {
+      if (packetList == null) {
+         return;
+      }
+      
       int firstSNinWindow = 0;
       int numAcks = Packet.numAcksAllowed;
       boolean[] sentCorrectly = new boolean[numAcks];
       boolean totallyDone = false;
       
       while (!totallyDone) {
+         System.out.println("Starting while !totallyDone");
+         System.out.println("firstSNinWindow: "+firstSNinWindow);
+         
          // Figure out which packets to send:
          ArrayList<Packet> packetsToSend = new ArrayList<Packet>();
          for (int i = 0; i < sentCorrectly.length; i++) {
-            if (!sentCorrectly[i]) {
+            if (!sentCorrectly[i] && (firstSNinWindow + i) < packetList.size()) {
                packetsToSend.add(packetList.get(firstSNinWindow + i));
             }
          }
@@ -78,36 +101,68 @@ class UDPServer {
          int firstACK = ACKvector.getACKNum();
          
          // Error checking, remove later
+         /*
          System.out.println("Got ACK vector for " + firstACK);
+         printBool(newACKs);
+         System.out.println("Old sentCorrectly");
+         printBool(sentCorrectly); */
+         //System.out.format("firstSNinWindow %d, firstACK %d\n",firstSNinWindow, firstACK);
          
          // Move window:
          int shift = 0;
          int firstNum = Math.max(firstSNinWindow, firstACK);
          int numCompares = 8 - Math.abs(firstSNinWindow - firstACK);
+         //System.out.format("shift %d, firstNum %d, numCompares %d\n",shift, firstNum, numCompares);
          // Update sentCorrectly:
-         for (int i = firstNum; i <= numCompares; i++) {
-            sentCorrectly[i % numAcks] = sentCorrectly[i % numAcks] || newACKs[i % numAcks];
+         for (int i = 0; i <= numCompares; i++) {
+            int index = i % numAcks;
+            //System.out.println("index : "+index);
+            sentCorrectly[index] = sentCorrectly[index] || newACKs[index];
          }
+         //System.out.println("Mixed sentCorrectly with new ACKS");
+         //printBool(sentCorrectly);
          
          // Count num of shifts
-         while (sentCorrectly[shift]) {
+         while (shift < numAcks && sentCorrectly[shift]) {
             shift++;
          }
          
+         System.out.println("Shift: " + shift);
+         
          // Move window
          for (int i = 0; i < numAcks; i++) {
-            if (i < shift) {
+            if ((i < (shift - 1)) && ((i + shift) < numAcks)) {
                sentCorrectly[i] = sentCorrectly[i + shift];
-               firstSNinWindow++;
+               //System.out.println("true: i: " + i);
             }
             else {
                sentCorrectly[i] = false;
+               //System.out.println("fasle: i: " + i);
             }
          }
+         firstSNinWindow += shift;
+         
+         //System.out.println("Shifted sentCorrectly by "+shift);
+         //printBool(sentCorrectly);
          
          // Check if we're totally done transmitting:
          if (firstSNinWindow >= packetList.size()) {
             totallyDone = true;
+         }
+         //else if (firstSNinWindow + numAcks >= packetList.size()) {
+            
+         //}
+         
+         
+         //System.out.println("firstSNinWindow: "+firstSNinWindow);
+         
+         
+         //TODO: Remove
+         try {
+            Thread.sleep(500);
+         }
+         catch (Exception e) {
+            continue;
          }
       }
       
@@ -130,7 +185,16 @@ class UDPServer {
             System.out.println("IOException while trying to send packet " + packet.getSequenceNum());
          }
          System.out.println("Sent a packet back.");
-         System.out.println(packet.toString());
+         //System.out.println(packet.toString());
+         System.out.println("SN: "+packet.getSequenceNum());
+         
+         //TODO: Remove
+         try {
+            Thread.sleep(100);
+         }
+         catch (Exception e) {
+            continue;
+         }
       }
    }
    
@@ -139,10 +203,10 @@ class UDPServer {
     * as a Packet object.
     */
    public static Packet waitForACK() throws Exception {
-      DatagramSocket recieveSocket = new DatagramSocket();
+      System.out.println("Waiting for ACK");
       byte[] receiveData = new byte[Packet.maxPacketSize];
       DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-      recieveSocket.receive(receivePacket);
+      serverSocket.receive(receivePacket);
       receiveData = receivePacket.getData();
       
       Packet ACKvector = new Packet(receiveData);
@@ -160,6 +224,10 @@ class UDPServer {
       String fileName = parseRequest(request);
       ArrayList<Packet> packetList = new ArrayList<Packet>();
       int sequenceNum = 0;
+      if (fileName == null) {
+         System.out.println("That's not an HTTP request!");
+         return null;
+      }
       InputStream fileInput = new FileInputStream(fileName);
       int bytesRead = 0;
       String headerInfo = "HTTP/1.0 200 Document Follows \r\nContent-Type: text/plain\r\nContent-Length: " 

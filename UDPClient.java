@@ -11,6 +11,9 @@ class UDPClient {
    private static String fileName = "TestFile.html";  // Arg 5
    private static String correctArgUsage = "Args should be in the following order:\n"
     + "<serverHostname> <portNumber> <corruption> <loss> <fileName>";
+    
+   private static DatagramSocket clientSocket;
+   private static InetAddress IPAddress;
 
    /**
     * Main. This is where the magic happens.
@@ -32,8 +35,8 @@ class UDPClient {
       String request = "GET " + fileName + " HTTP/1.0";
       System.out.println("Request: " + request);
       
-      DatagramSocket clientSocket = new DatagramSocket();
-      InetAddress IPAddress = InetAddress.getByName(serverHostname);
+      clientSocket = new DatagramSocket();
+      IPAddress = InetAddress.getByName(serverHostname);
       byte[] sendData = new byte[1024];
       sendData = request.getBytes();
       
@@ -60,41 +63,113 @@ class UDPClient {
    public static ArrayList<Packet> recievePackets(DatagramSocket clientSocket) throws Exception {
       boolean receivedLastPacket = false;
       ArrayList<Packet> packetsList = new ArrayList<Packet>();
+      int numAcks = Packet.numAcksAllowed;
+      int firstSNinWindow = 0;
+      
+      boolean totallyDone = false;
       
       // Read in packets, and sort them:
       do {
-         byte[] receiveData = new byte[Packet.maxPacketSize];
-         DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-         clientSocket.receive(receivePacket);
-         System.out.println("Recieved a packet!"); 
-         receiveData = receivePacket.getData();
+         boolean[] receivedCorrectly = new boolean[numAcks];
          
-         Packet packet = new Packet(receiveData);
-         packet = gremlin(packet);
+         // Read in 8 packets at a time:
+         for (int incomingPacketNum = 0; incomingPacketNum < numAcks; incomingPacketNum++) {
+            byte[] receiveData = new byte[Packet.maxPacketSize];
+            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            clientSocket.receive(receivePacket);
+            System.out.println("Recieved a packet!"); 
+            receiveData = receivePacket.getData();
          
-         if (packet == null || errorDetected(packet)) {
-            continue;
-         }
+            Packet packet = new Packet(receiveData);
+            // TODO: remove
+            System.out.println("Recieved packet " + packet.getSequenceNum()+ "!");
+            
+            packet = gremlin(packet);
          
-         System.out.println(packet.toString()); 
-         int sequenceNumber = packet.getSequenceNum();
-         if (packetsList.size() == sequenceNumber) {
-            packetsList.add(packet);
-         }
-         else if (packetsList.size() < sequenceNumber) {
-            for (int i = packetsList.size(); i < sequenceNumber; i++) {
-               packetsList.add(null);
+            if (packet == null || errorDetected(packet)) {
+               receivedCorrectly[incomingPacketNum] = false;
+               break;
             }
-            packetsList.add(sequenceNumber, packet);
+            
+            receivedCorrectly[incomingPacketNum] = true;
+         
+            //System.out.println(packet.toString()); 
+            int sequenceNumber = firstSNinWindow + incomingPacketNum;
+            if (packetsList.size() == sequenceNumber) {
+               packetsList.add(packet);
+            }
+            else if (packetsList.size() < sequenceNumber) {
+               for (int i = packetsList.size(); i < sequenceNumber; i++) {
+                  packetsList.add(null);
+               }
+               packetsList.add(sequenceNumber, packet);
+            }
+            else {
+               packetsList.add(sequenceNumber, packet);
+            }
+         
+            receivedLastPacket = packet.lastPacket();
+            if (receivedLastPacket) {
+               for (int packetsLeft = incomingPacketNum + 1; packetsLeft < numAcks; packetsLeft++) {
+                  receivedCorrectly[packetsLeft] = true;
+               }
+               break;
+            }
          }
-         else {
-            packetsList.add(sequenceNumber, packet);
+         
+         printBool(receivedCorrectly);
+         
+         // Make ACK/NAK vector
+         Packet packetACK = new Packet(firstSNinWindow, receivedCorrectly);
+         
+         // Send ACK/NAK vector
+         byte[] packetBytes = packetACK.toByteArray();
+         DatagramPacket sendPacket = new DatagramPacket(packetBytes, packetBytes.length, IPAddress, portNumber);
+         clientSocket.send(sendPacket);
+         System.out.println("Sent an ACK vector!");
+         
+         // Check if we're totally done
+         if (receivedLastPacket) {
+            totallyDone = true;
+            for (int ACKnum = 0; ACKnum < numAcks; ACKnum++) {
+               totallyDone = totallyDone && receivedCorrectly[ACKnum];
+            }
          }
-      
-         receivedLastPacket = packet.lastPacket();
-      } while (!receivedLastPacket);
+         
+         // Move window forward
+         int shift = 0; // Count num of shifts
+         while (shift < numAcks && receivedCorrectly[shift]) {
+            shift++;
+         }
+         
+         // Move window
+         for (int i = 0; i < numAcks; i++) {
+            // If we need to shift the array over:
+            if ((i < (shift - 1)) && ((i + shift) < numAcks)) {
+               receivedCorrectly[i] = receivedCorrectly[i + shift];
+            }
+            // For packets past the 
+            else {
+               receivedCorrectly[i] = false;
+            }
+         }
+         firstSNinWindow += shift;
+         
+      } while (!totallyDone);
    
       return packetsList;
+   }
+   
+   public static void printBool(boolean[] arr) {
+      String result = "";
+      for (int i = 0; i < arr.length; i++) {
+         result += arr[i] + " ";
+      }
+      System.out.println(result);
+   }
+   
+   public static boolean[] moveWindow(boolean[] window) {
+      return null;
    }
    
    /**
@@ -112,7 +187,7 @@ class UDPClient {
       
       if (packet.getChecksum() != packet.generateChecksum()) {
          System.out.println("An error was detected in packet " + packet.getSequenceNum() + ":");
-         System.out.println(packet.toString());
+         //System.out.println(packet.toString());
          return true;
       }
       return false;
@@ -159,7 +234,7 @@ class UDPClient {
       for (int i = 0; i < numBytesDamaged; i++) {
          int byteToChange = (int) (Math.random() * packetData.length);
          packetData[byteToChange] = (byte) (packetData[byteToChange] ^ 0xFF);
-         System.out.println("Changed a byte!");
+         //System.out.println("Changed a byte!");
       }
       
       packet.setData(packetData);

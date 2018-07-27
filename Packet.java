@@ -90,15 +90,6 @@ class Packet {
    }
    
    /**
-    * Initializes a Packet object with only a Sequence Number.
-    * Please don't use this on accident.
-    * Only on purpose, pls.
-    */
-   public Packet(int sn) {
-      sequenceNum = sn % maxSequenceNum;
-   }
-   
-   /**
     * Converts the Packet data into a byte array, ready to be sent.
     */
    public byte[] toByteArray() {
@@ -189,6 +180,9 @@ class Packet {
       return result;
    }
    
+   /**
+    * Prints ACK info.
+    */
    public void printACK() throws Exception {
       String result = "";
       for (int i = 0; i < numOfAcks; i++) {
@@ -206,7 +200,7 @@ class Packet {
     * Returns true if this is the last packet, and false otherwise.
     */
    public boolean lastPacket() {
-      if (data[lastIndex - headerSize] == 0b0) {
+      if (lastIndex < headerSize + 3 && data[lastIndex - headerSize] == 0b0) {
          return true;
       }
       return false;
